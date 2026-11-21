@@ -108,8 +108,8 @@
     timerScreen.hidden = false;
     render();
   }
-  dateInput.addEventListener('change', startTimer);
-  dateInput.addEventListener('input', startTimer);
+  dateInput.addEventListener('change', render);
+  dateInput.addEventListener('input', render);
   document.querySelector('#chooseDate').addEventListener('click', () => {
     try {
       if (dateInput.showPicker) dateInput.showPicker();
