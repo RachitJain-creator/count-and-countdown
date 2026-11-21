@@ -13,6 +13,8 @@
   label { display: block; font-size: 19px; line-height: 1.35; margin-bottom: 8px; }
   input, select, button { width: 100%; height: 62px; border: 1px solid #c8d3e5; border-radius: 14px; padding: 0 16px; background: #fff; color: #202a45; font: inherit; font-size: 19px; outline: none; }
   input:focus, select:focus { border-color: #687faa; box-shadow: 0 0 0 3px #dce5f5; }
+  button { cursor: pointer; }
+  button:hover { border-color: #8998b2; }
   .field { min-width: 0; }
   .mode { margin-bottom: 24px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
@@ -23,6 +25,10 @@
   .event-title { font-size: 23px; margin-bottom: 48px; }
   .time { font-size: clamp(60px, 7vw, 80px); line-height: 1.05; letter-spacing: -2px; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
   .description { font-size: 20px; margin-top: 34px; }
+  .timer-actions { display: flex; gap: 12px; margin-top: 28px; }
+  .timer-actions button { width: auto; min-width: 110px; height: 46px; font-size: 16px; }
+  .save-status { color: #5e6d8b; font-size: 14px; align-self: center; }
+  .setup-actions { display: flex; gap: 12px; }
   @media (max-width: 600px) {
     main { width: min(100% - 32px, 900px); margin-top: 22px; }
     h1 { font-size: 28px; }
@@ -32,6 +38,9 @@
     .event-title { font-size: 20px; margin-bottom: 34px; }
     .time { font-size: clamp(42px, 11vw, 64px); letter-spacing: -1.4px; }
     .description { font-size: 17px; margin-top: 27px; }
+    .timer-actions { flex-wrap: wrap; }
+    .timer-actions button { flex: 1; min-width: 84px; }
+    .setup-actions { flex-direction: column; }
   }
 </style>
 </head>
@@ -41,7 +50,7 @@
   <div class="field mode"><label for="mode">Mode</label><select id="mode"><option value="down">Event countdown</option><option value="up">Count up from a date</option></select></div>
   <div class="row">
     <div class="field"><label for="eventName">Event name</label><input id="eventName" type="text" value="CA Final Exam" placeholder="Name your event"></div>
-    <div class="field"><label for="chooseDate">Timer date and time</label><button id="chooseDate" type="button">Choose date &amp; time</button><input id="eventDate" type="datetime-local" value="" hidden></div>
+    <div class="field"><label for="chooseDate">Timer date and time</label><div class="setup-actions"><button id="chooseDate" type="button">Choose date &amp; time</button><button id="startButton" type="button" hidden>Start timer</button></div><input id="eventDate" type="datetime-local" value="" hidden></div>
   </div>
   <p class="hint">Choose a date and time to start the full-screen timer.</p>
 </main>
@@ -50,6 +59,7 @@
     <div class="event-title" id="displayName"></div>
     <div class="time" id="time"></div>
     <div class="description" id="description"></div>
+    <div class="timer-actions"><button id="resetButton" type="button">Reset</button><button id="editButton" type="button">Edit</button><button id="saveButton" type="button">Save</button><span class="save-status" id="saveStatus" role="status"></span></div>
   </div>
 </section>
 <script>
@@ -61,12 +71,25 @@
   const displayName = document.querySelector('#displayName');
   const timeOutput = document.querySelector('#time');
   const description = document.querySelector('#description');
+  const startButton = document.querySelector('#startButton');
+  const saveStatus = document.querySelector('#saveStatus');
   let started = false;
+  const storageKey = 'count-and-countdown-event';
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+    if (saved) {
+      mode.value = saved.mode || 'down';
+      nameInput.value = saved.name || 'CA Final Exam';
+      dateInput.value = saved.date || '';
+      if (dateInput.value && !Number.isNaN(new Date(dateInput.value).getTime())) startTimer();
+    }
+  } catch {}
   function render() {
     const name = nameInput.value.trim() || 'Your event';
     displayName.textContent = name;
     const isUp = mode.value === 'up';
     const target = new Date(dateInput.value).getTime();
+    startButton.hidden = !dateInput.value;
     if (!dateInput.value || Number.isNaN(target)) return;
     let seconds = Math.floor(Math.abs(target - Date.now()) / 1000);
     const days = Math.floor(seconds / 86400); seconds %= 86400;
@@ -76,17 +99,42 @@
     const elapsed = target <= Date.now();
     timeOutput.textContent = `${days}d ${clock}`;
     description.textContent = !isUp && elapsed ? `${name} has passed.` : isUp && !elapsed ? 'Your date is still in the future.' : isUp ? 'Counting up from your date.' : 'Counting down to your event.';
-    if (!started) {
-      started = true;
-      setup.hidden = true;
-      timerScreen.hidden = false;
-    }
   }
-  dateInput.addEventListener('change', render);
-  dateInput.addEventListener('input', render);
+  function startTimer() {
+    if (!dateInput.value || Number.isNaN(new Date(dateInput.value).getTime())) return;
+    started = true;
+    setup.hidden = true;
+    timerScreen.hidden = false;
+    render();
+  }
+  dateInput.addEventListener('change', startTimer);
+  dateInput.addEventListener('input', startTimer);
   document.querySelector('#chooseDate').addEventListener('click', () => {
     if (dateInput.showPicker) dateInput.showPicker();
     else dateInput.click();
+  });
+  startButton.addEventListener('click', startTimer);
+  document.querySelector('#editButton').addEventListener('click', () => {
+    started = false;
+    setup.hidden = false;
+    timerScreen.hidden = true;
+    saveStatus.textContent = '';
+  });
+  document.querySelector('#resetButton').addEventListener('click', () => {
+    localStorage.removeItem(storageKey);
+    started = false;
+    mode.value = 'down';
+    nameInput.value = 'CA Final Exam';
+    dateInput.value = '';
+    setup.hidden = false;
+    timerScreen.hidden = true;
+    saveStatus.textContent = '';
+    render();
+  });
+  document.querySelector('#saveButton').addEventListener('click', () => {
+    localStorage.setItem(storageKey, JSON.stringify({ mode: mode.value, name: nameInput.value, date: dateInput.value }));
+    saveStatus.textContent = 'Saved on this device';
+    window.setTimeout(() => { saveStatus.textContent = ''; }, 2200);
   });
   [mode, nameInput].forEach(el => el.addEventListener('input', render));
   document.addEventListener('keydown', event => {
